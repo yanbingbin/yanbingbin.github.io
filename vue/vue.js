@@ -71,6 +71,7 @@ function track(target, key) { // 如果taeget中的key发生改变，执行栈�
         }
         if (!deps.has(effect)) {
             deps.add(effect); // 将effect添加到当前的targetsMap对应的target的存放的depsMap里key对应的deps
+            effect.deps.push(deps)
         }
     }
 }
@@ -79,14 +80,22 @@ function trigger(target, key, type) {
     // console.log(`set value:${type}`, key)
     // 触发更新，找到依赖effect
     let depsMap = targetsMap.get(target);
+
     if (depsMap) {
         let effects = new Set();
+        let computedRunners = new Set();
         let deps = depsMap.get(key);
+
         if (deps) {
             deps.forEach(effect => {
-                effects.add(effect);
+                if (effect.computed) {
+                    computedRunners.add(effect);
+                } else {
+                    effects.add(effect);
+                }
             });
         }
+
         if ((type === 'ADD' || type === 'DELETE') && Array.isArray(target)) {
             const iterationKey = 'length';
             const deps = depsMap.get(iterationKey);
@@ -96,20 +105,22 @@ function trigger(target, key, type) {
                 });
             }
         }
+
         effects.forEach(effect => effect());
+        computedRunners.forEach(computed => computed());
     }
 }
 
 function watchEffect(fn, options = {}) {
     // 创建一个响应式的影响函数，往effectsStack push一个effect函数，执行fn
     const effect = createReactiveEffect(fn, options);
-    // if (!options.lazy) {
-    //     effect()
-    // }
+    if (!options.lazy) {
+        effect()
+    }
     return effect;
 }
 
-function createReactiveEffect(fn) {
+function createReactiveEffect(fn, options) {
     const effect = function() {
         // 判断栈中是否已经有过该effect,避免递归循环重复添加，比如在监听函数中修改依赖数据
         if (!effectsStack.includes(effect)) { 
@@ -121,27 +132,52 @@ function createReactiveEffect(fn) {
             }
         }
     }
-    effect(); // 默认执行一次
+    effect.deps = [];
+    effect.computed = options.computed;
+    effect.lazy = options.lazy;
+    return effect;
 }
 
-// function computed(fn) {
-//     const runner = watchEffect(fn, { lazy: true, computed: true });
-//     return {
-//         effect: runner,
-//         get value() {
-//             return runner();
-//         }
-//     }
-// }
+function computed(fn) {
+    // let dirty = true;
+    let value;
+    const runner = watchEffect(fn, { 
+        lazy: true, 
+        computed: true
+    });
+    return {
+        effect: runner,
+        get value() {
+            value = runner();
+            trackChildRun(runner);
+            return value;
+        }
+    }
+}
 
-let person = reactive({
-    name: '烟花渲染离别',
-});
+function trackChildRun(childRunner) {
+    if (!effectsStack.length) return;
+    const effect = effectsStack[effectsStack.length - 1];
+    for (let i = 0; i < childRunner.deps.length; i++) {
+        const dep = childRunner.deps[i];
 
-// watchEffect(() => {
-//     console.log(person.name); // 内部依赖逻辑必须是同步的
-// });
-// person.name = '更新后的名字是我';
+        if (!dep.has(effect)) {
+            dep.add(effect);
+            effect.deps.push(dep);
+        }
+    }
+}
+
+
+// computed案例
+// 1. 响应式数据
+const data = reactive({ count: 0 })
+// 2. 计算属性
+const plusOne = computed(() => data.count + 1)
+// 3. 依赖收集
+watchEffect(() => console.log(plusOne.value))
+// 4. 触发上面的effect重新执行
+data.count = 2
 
 // 异步案例
 // watchEffect(() => {
@@ -158,3 +194,16 @@ let person = reactive({
 // let r = reactive(data);
 // watchEffect(() => console.log(r.ary.length));
 // r.ary.unshift(1);  // 4
+
+// 引入computed
+// let person = reactive({
+//     age: 22
+// });
+// let age = 0;
+
+// watchEffect(() => {
+//     age = person.age;
+// });
+// console.log(age);
+// person.age = 18;
+// console.log(age);
