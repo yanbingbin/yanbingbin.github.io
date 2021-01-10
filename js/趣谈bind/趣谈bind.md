@@ -200,3 +200,7 @@ Function.prototype.selfBind = function (context, ...bindArgs) {
 非常感谢各位能阅读到这里，觉得有帮助的话不妨点个赞，你的支持是对我对最大的鼓励。
 
 ![](http://ww3.sinaimg.cn/bmiddle/006r3PQBjw1fccoeystbuj308c08cwep.jpg =150x150)
+
+新一篇的 new 已经更新了，欢迎各位看官捧场！！
+
+[趣谈new](https://juejin.cn/post/6916119250251972616)
