@@ -1,0 +1,155 @@
+## 引子
+
+在工作中经常会遇到一个场景，表格的数据需要用弹框修改时，我们将数据传入弹框，此时修改弹框中传入的数据，会惊奇的发现表格的数据也变化了，这是为什么呢？怎么避免出现这种情况？不着急，看完这篇文章，大家一切都会明白。
+
+## 数据类型
+
+说起拷贝，就不得不提起 `js` 的数据类型了，因为深拷贝和浅拷贝的核心点就在于不同的数据类型在内存中存储的方式不同。
+
+### ECMAScript 基本数据类型
+
+最新的 `ECMAScript` 标准定义了 8 种数据类型，其中 7 中是基本数据类型，它们是：`Boolean`、`Null`、`Undefined`、`Number`、`String`、`BigInt`、`Symbol`。
+
+基本数据类型都是存储在栈（`stack`）内存中，栈具有先进后出的特点，基本数据类型占用空间小、大小固定，通过按值来访问，属于被频繁使用的数据。
+
+所有的基本类型值本身是无法被改变的。可能有的人会有疑问，我天天修改字符串等基本类型值，还不是发生了改变么，其实我们对字符串进行操作后，返回的都是新的字符串，并没有修改原来的数据。
+
+```js
+let a = 1;
+let b = a;
+b = 2;
+console.log(a, b); // 1 2
+```
+
+基本数据类型的赋值，赋值后两个变量互不影响，`b`复制的是`a`的原始值，它们存储在独立的的栈空间中，因此修改了`b`的值，`a`的值不会受到影响，大家可以查看下图更清晰的了解。
+
+![](https://p9-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/0a681319bfd6484f8a458cf01fa9ccd5~tplv-k3u1fbpfcp-watermark.image)
+
+### ECMAScript 引用数据类型
+
+引用数据类型 `Object`，像 `Array`、`Function`、`Date`...等都属于 `Object`，它们的值都是对象。
+
+引用数据类型存放在堆内存中，可以直接进行访问和修改。
+
+引用数据类型占据空间大、大小不固定，存放在栈中会有性能的问题。引用数据类型在栈中保存了一份指针，该指针指向对应的数据在堆中的起始地址，当解释器寻找引用值时，会首先检索其在栈中的地址，通过地址从堆中获得数据。
+
+```js
+let obj = { name: '烟花渲染离别' };
+let obj2 = obj;
+obj2.name = '七宝';
+console.log(obj.name); // 七宝
+console.log(obj2.name); // 七宝
+```
+引用类型的赋值，在栈中复制了一份引用类型的地址指针，两个变量指向的还是同一个对象，所以修改了`obj2.name`，`obj.name`也会发生改变，这种改变有时候并不是我们所期望的，这时候就需要拿出我们的秘技：浅拷贝和深拷贝。
+
+![](https://p9-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/adeba38dff46430aa343a34ea679dde0~tplv-k3u1fbpfcp-watermark.image)
+
+## 浅拷贝
+
+浅拷贝就是将源对象的属性拷贝一份，如果属性时基本类型值，直接拷贝基本类型值，如果属性是引用类型，则拷贝的是该引用类型在堆中的地址。下面介绍几种常用的浅拷贝方法：
+
+### 展开运算符 ...
+
+个人常用的浅拷贝就是 `...`展开运算符了，展开运算符是`es6`的新特性，相信大家都已经很了解了，不了解的可以前往阮一峰大神的[ECMAScript 6 入门](https://es6.ruanyifeng.com/#docs/object#%E5%AF%B9%E8%B1%A1%E7%9A%84%E6%89%A9%E5%B1%95%E8%BF%90%E7%AE%97%E7%AC%A6)查看。
+
+```js
+let obj = { name: '烟花渲染离别' };
+let obj2 = { ...obj };
+obj2.name = '七宝';
+console.log(obj.name); // 烟花渲染离别
+console.log(obj2.name); // 七宝
+```
+
+### Object.assign()
+
+`Object.assign()` 方法用于将所有可枚举属性的值从一个或多个源对象分配到目标对象。它将返回目标对象。
+
+我一般是在需要合并两个对象成为一个新对象时使用这个方法。
+
+```js
+let obj = { name: '烟花渲染离别' };
+let obj2 = Object.assign({}, obj);
+obj2.name = '七宝';
+console.log(obj.name); // 烟花渲染离别
+console.log(obj2.name); // 七宝
+```
+
+### concat和slice
+
+这两个方法常用来拷贝数组。
+
+```js
+let arr = [1, 2];
+let arr2 = arr.concat();
+arr.push(3);
+console.log(arr); // [1, 2, 3]
+console.log(arr2); // [1, 2]
+```
+
+```js
+let arr = [1, 2];
+let arr2 = arr.slice();
+arr.push(3);
+console.log(arr); // [1, 2, 3]
+console.log(arr2); // [1, 2]
+```
+
+### 浅拷贝的问题
+
+有了浅拷贝后，为什么还需要深拷贝呢？自然是因为浅拷贝是有缺陷的，如果拷贝的对象中属性有引用类型值的话，浅拷贝就不能达到预期的完全复制隔离的效果了，下面来看个例子：
+
+```js
+let obj = { name: '烟花渲染离别', hobby: ['看动漫'] };
+let obj2 = { ...obj };
+obj2.name = '七宝';
+console.log(obj.name); // 烟花渲染离别
+console.log(obj2.name); // 七宝
+
+obj.hobby.push('打球');
+console.log(obj.hobby); // ['看动漫', '打球']
+console.log(obj2.hobby); // ['看动漫', '打球']
+console.log(obj.hobby === obj2.hobby); // true
+```
+
+可以看到浅拷贝后，`obj.hobby`的修改影响到了`obj2.hobby`，根据我们上面引用类型的赋值，我们可以大胆推测，浅拷贝拷贝的是`hobby`的指针。同样画个图方便大家理解。
+
+![](https://p6-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/3034ddb3e0bd45389b279f1684572099~tplv-k3u1fbpfcp-watermark.image)
+
+既然浅拷贝有这种问题，那我们肯定想要避免这个问题，怎么去避免这个问题呢？这就要用到我下面要讲的深拷贝了。
+
+## 深拷贝
+
+深拷贝，顾名思义就是比浅拷贝能够更深层级的拷贝，它能够将拷贝过程中遇到的引用类型都新开辟一块地址拷贝对应的数据，这样就能避免子对象共享同一份内存的问题了。
+
+### JSON.parse(JSON.stringify())
+
+```js
+let obj = { name: '烟花渲染离别', hobby: ['看动漫'] };
+let obj2 = JSON.parse(JSON.stringify(obj));
+obj.hobby.push('打球');
+console.log(obj.hobby); // ['看动漫', '打球']
+console.log(obj2.hobby); // ['看动漫']
+```
+
+基于`JSON.stringify`将对象先转成字符串，再通过`JSON.parse`将字符串转成对象，此时对象中每个层级的堆内存都是新开辟的。
+
+这种方法虽然简单，但它还有几个缺陷：
+1. 无法拷贝特殊对象，比如：`RegExp`、`BigInt`、`Date`、`Set`、`Map`等
+2. 不能解决循环引用的问题
+
+### 手写深拷贝
+
+既然利用`js`内置的方法进行深拷贝有缺陷的话，那我们就自己动手实现一个深拷贝吧。
+
+实现深拷贝之前思考下我们思考下应该怎么去实现，其实核心就是：浅拷贝 + 递归。对于基本数据类型，我们直接拷贝即可，对于引用数据类型，则需要进行递归拷贝。
+
+
+
+
+
+
+参考文章：
+[「前端进阶」JS中的栈内存堆内存](https://juejin.cn/post/6844903873992196110#heading-6)
+[浅拷贝与深拷贝](https://juejin.cn/post/6844904197595332622)
+[如何写出一个惊艳面试官的深拷贝?](https://segmentfault.com/a/1190000020255831)
+[深拷贝的终极探索（99%的人都不知道）](https://segmentfault.com/a/1190000016672263)
