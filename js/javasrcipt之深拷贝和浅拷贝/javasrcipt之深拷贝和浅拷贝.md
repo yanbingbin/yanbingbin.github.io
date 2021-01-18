@@ -134,22 +134,91 @@ console.log(obj2.hobby); // ['看动漫']
 基于`JSON.stringify`将对象先转成字符串，再通过`JSON.parse`将字符串转成对象，此时对象中每个层级的堆内存都是新开辟的。
 
 这种方法虽然简单，但它还有几个缺陷：
-1. 无法拷贝特殊对象，比如：`RegExp`、`BigInt`、`Date`、`Set`、`Map`等
-2. 不能解决循环引用的问题
+1. 不能解决循环引用的问题
+2. 无法拷贝特殊对象，比如：`RegExp`、`BigInt`、`Date`、`Set`、`Map`等
 
 ### 手写深拷贝
 
 既然利用`js`内置的方法进行深拷贝有缺陷的话，那我们就自己动手实现一个深拷贝吧。
 
-实现深拷贝之前思考下我们思考下应该怎么去实现，其实核心就是：浅拷贝 + 递归。对于基本数据类型，我们直接拷贝即可，对于引用数据类型，则需要进行递归拷贝。
+实现深拷贝之前思考下我们思考下应该怎么去实现，其实核心就是：浅拷贝 + 递归。
+- 对于基本数据类型，我们直接拷贝即可
+- 对于引用数据类型，则需要进行递归拷贝。
 
+我们先动手实现一个功能类似`JSON.parse(JSON.stringify())`的简单深拷贝，能对对象和数组进行深拷贝
 
+```js
+// 获取对象
+function isObject(target) {
+    const type = typeof target;
+    return target !== null && (type === 'object' || type === 'function');
+}
 
+function deepClone(target) {
+    if (!isObject(target)) return target; // 拷贝基本类型值
+
+    let cloneTarget = Array.isArray(target) ? [] : {}; // 判断拷贝的是否是数组
+    Object.keys(target).forEach(key => {
+        cloneTarget[key] = deepClone(target[key]); // 递归拷贝属性
+    });
+    return cloneTarget;
+}
+
+let obj = { name: '烟花渲染离别', hobby: ['看动漫'] };
+let obj2 = deepClone(obj);
+obj2.name = '七宝';
+console.log(obj.name); // 烟花渲染离别
+console.log(obj2.name); // 七宝
+
+obj.hobby.push('打球');
+console.log(obj.hobby); // ['看动漫', '打球']
+console.log(obj2.hobby); // ['看动漫']
+```
+
+![](https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/637e7e06bcab4ff287ffb666bb3873c0~tplv-k3u1fbpfcp-watermark.image)
+
+可以看到基本实现了`JSON.parse(JSON.stringify())`的深拷贝功能，但是我们都知道这种方法的缺陷，那我们继续完善深拷贝方法。
+### 处理循环引用
+
+什么是循环引用呢？简单来说就是自己内部引用了自已，和递归的自己调用自己有点像，来看个例子吧：
+
+```js
+let obj = { name: '烟花渲染离别' };
+obj.info = obj;
+console.log(obj);
+```
+![](https://p1-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/5b5a4ae7eb0f480d9d6d86abe764791a~tplv-k3u1fbpfcp-watermark.image)
+
+如果使用上面的深拷贝的话，因为没有处理循环引用，就会导致`info`属性一直递归拷贝，递归死循环导致栈内存溢出。
+
+![](https://p9-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/4c5df9102cb44beb9c0337f6448b37b6~tplv-k3u1fbpfcp-watermark.image)
+
+如何处理循环引用呢？我们可以开辟一个空间存储要拷贝过的对象，当拷贝当前对象时，先去存储空间查找该对象是否被拷贝过，如果拷贝过，直接返回该对象，如果没有拷贝过就继续拷贝。
+
+```js
+function deepClone(target, cache = new WeakSet()) { 
+    if (!isObject(target)) return target; // 拷贝基本类型值
+    if (cache.has(target)) return target; // 如果之前已经拷贝过该对象，直接返回该对象
+    cache.add(target); // 将对象添加缓存
+
+    let cloneTarget = Array.isArray(target) ? [] : {}; // 判断拷贝的是否是数组
+    Object.keys(target).forEach(key => {
+        cloneTarget[key] = deepClone(target[key], cache); // 递归拷贝属性，将缓存传递
+    });
+    return cloneTarget;
+}
+```
+这里采用了`WeakSet`收集拷贝对象，`WeakSet`中的对象都是弱引用的，垃圾回收机制不考虑`WeakSet`对该对象的引用。如果我们拷贝的对象很大的时候，使用`Set`会导致很大的内存消耗，需要我们手动清除`Set`中的数据才能释放内存，而`WeakSet`则不会有这样的问题。
+
+![](https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/5e80fbf0ec89495fb0ab773d3f294291~tplv-k3u1fbpfcp-watermark.image)
+
+可以看到就算对象有循环引用的问题也能成功复制。
+
+### 处理其他类型数据
 
 
 
 参考文章：
-[「前端进阶」JS中的栈内存堆内存](https://juejin.cn/post/6844903873992196110#heading-6)
+[「前端进阶」JS中的栈内存堆内存](https://juejin.cn/post/6844903873992196110)
 [浅拷贝与深拷贝](https://juejin.cn/post/6844904197595332622)
 [如何写出一个惊艳面试官的深拷贝?](https://segmentfault.com/a/1190000020255831)
-[深拷贝的终极探索（99%的人都不知道）](https://segmentfault.com/a/1190000016672263)

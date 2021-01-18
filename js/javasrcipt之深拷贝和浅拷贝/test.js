@@ -76,6 +76,44 @@ function deepClone(target) {
     return cloneTarget;
 }
 
+
+// 深拷贝
+let obj = { name: '烟花渲染离别', hobby: ['看动漫'] };
+let obj2 = deepClone(obj);
+obj2.name = '七宝';
+console.log(obj.name); // 烟花渲染离别
+console.log(obj2.name); // 七宝
+
+obj.hobby.push('打球');
+console.log(obj.hobby); // ['看动漫', '打球']
+console.log(obj2.hobby); // ['看动漫']
+
+
+// 循环引用
+
+function isObject(target) {
+    const type = typeof target;
+    return target !== null && (type === 'object' || type === 'function');
+}
+
+function deepClone(target, cache = new WeakSet()) {
+    if (!isObject(target)) return target; // 拷贝基本类型值
+    if (cache.has(target)) return target;
+    cache.add(target);
+
+    let cloneTarget = Array.isArray(target) ? [] : {}; // 判断拷贝的是否是数组
+    Object.keys(target).forEach(key => {
+        cloneTarget[key] = deepClone(target[key], cache); // 递归拷贝属性
+    });
+    return cloneTarget;
+}
+
+let obj = { name: '烟花渲染离别' };
+obj.info = obj;
+console.log(obj);
+
+const obj2 = deepClone(obj);
+
 // 基本实现
 
 // 递归能力
