@@ -1,3 +1,4 @@
+<!-- 浅拷贝与深拷贝之终极无敌之上帝视角之全面深入了解 -->
 ## 引子
 
 在工作中经常会遇到一个场景，表格的数据需要用弹框修改时，我们将数据传入弹框，此时修改弹框中传入的数据，会惊奇的发现表格的数据也变化了，这是为什么呢？怎么避免出现这种情况？不着急，看完这篇文章，大家一切都会明白。
@@ -191,7 +192,7 @@ console.log(obj);
 
 如果使用上面的深拷贝的话，因为没有处理循环引用，就会导致`info`属性一直递归拷贝，递归死循环导致栈内存溢出。
 
-![](https://p9-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/4c5df9102cb44beb9c0337f6448b37b6~tplv-k3u1fbpfcp-watermark.image)
+<!-- ![](https://p9-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/4c5df9102cb44beb9c0337f6448b37b6~tplv-k3u1fbpfcp-watermark.image) -->
 
 如何处理循环引用呢？我们可以开辟一个空间存储要拷贝过的对象，当拷贝当前对象时，先去存储空间查找该对象是否被拷贝过，如果拷贝过，直接返回该对象，如果没有拷贝过就继续拷贝。
 
@@ -210,15 +211,144 @@ function deepClone(target, cache = new WeakSet()) {
 ```
 这里采用了`WeakSet`收集拷贝对象，`WeakSet`中的对象都是弱引用的，垃圾回收机制不考虑`WeakSet`对该对象的引用。如果我们拷贝的对象很大的时候，使用`Set`会导致很大的内存消耗，需要我们手动清除`Set`中的数据才能释放内存，而`WeakSet`则不会有这样的问题。
 
-![](https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/5e80fbf0ec89495fb0ab773d3f294291~tplv-k3u1fbpfcp-watermark.image)
+<!-- ![](https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/5e80fbf0ec89495fb0ab773d3f294291~tplv-k3u1fbpfcp-watermark.image) -->
 
-可以看到就算对象有循环引用的问题也能成功复制。
+<!-- 可以看到就算对象有循环引用的问题也能成功复制。 -->
 
-### 处理其他类型数据
+### 处理键是 Symbol 类型
+
+`Symbol 值`作为键名，无法被`Object.keys()`、`Object.getOwnPropertyNames()`、`for..in`、`for..of`获取到。
+
+```js
+let symbol = Symbol('我是独一无二的值');
+let obj = { name: '烟花渲染离别', [symbol]: '' };
+const obj2 = deepClone(obj);
+console.log(obj2); // { name: "烟花渲染离别" }
+```
+
+![](https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/af96f3aa9c64467391a3246a094047c1~tplv-k3u1fbpfcp-watermark.image)
+
+可以看到，深拷贝后并没有拿到`Symbol`属性的，我们可以通过`Object.getOwnPropertySymbols()`来获取到对象上面所有的`Symbol`键。但是我们不仅仅需要获取`Symbol`属性，还需要获取其他属性，我们可以使用`Reflect.ownKeys()`来拿到对象的所有属性。
+
+```js
+function deepClone(target, cache = new WeakSet()) {
+    if (!isObject(target)) return target; // 拷贝基本类型值
+    if (cache.has(target)) return target;
+    cache.add(target);
+
+    let cloneTarget = Array.isArray(target) ? [] : {}; // 判断拷贝的是否是数组
+    Reflect.ownKeys(target).forEach(key => {
+        cloneTarget[key] = deepClone(target[key], cache); // 递归拷贝属性
+    });
+    return cloneTarget;
+}
+
+let symbol = Symbol('我是独一无二的值');
+let obj = { name: '烟花渲染离别', [symbol]: '' };
+console.log(obj); // { name: "烟花渲染离别", Symbol(我是独一无二的值): "" }
+const obj2 = deepClone(obj); 
+console.log(obj2); // { name: "烟花渲染离别", Symbol(我是独一无二的值): "" }
+```
+
+### 处理其他引用类型值
+
+上面只处理了数组和对象，还有其他的很多引用类型的值没进行处理，我们需要先知道要知道要拷贝的是什么类型的对象，我们可以使用`Object.prototype.toString.call()`来获取对象的准确类型。
+
+获取到了具体的引用类型后，我们可以根据对应的类型进行初始化对象的操作。
+
+```js
+const arrayTag = '[object Array]'
+const objectTag = '[object Object]'
+const mapTag = '[object Map]'
+const setTag = '[object Set]'
+
+const boolTag = '[object Boolean]'
+const dateTag = '[object Date]'
+const errorTag = '[object Error]'
+const numberTag = '[object Number]'
+const regexpTag = '[object RegExp]'
+const stringTag = '[object String]'
+const symbolTag = '[object Symbol]'
+```
+
+#### 初始化拷贝对象
+
+```js
+function initCloneTargetByTag(target) {
+    const Ctor = target.constructor;
+    switch (tag) {
+        case boolTag:
+        case dateTag:
+        case numberTag:
+        case stringTag:
+        case errorTag:
+            return new Ctor(target);
+
+        case objectTag:
+        case mapTag:
+        case setTag:
+            return new Ctor;
+
+        case symbolTag:
+            return cloneSymbol(target);
+
+        case regexpTag:
+            return cloneRegExp(target);
+    }
+}
+```
+
+#### 处理可遍历类型 - 数组
+
+```js
+function initCloneArray(array) {
+    const { length } = array;
+    const result = new array.constructor(length);
+  
+    if (length && typeof array[0] === 'string' && hasOwnProperty.call(array, 'index')) {
+        result.index = array.index;
+        result.input = array.input;
+    }
+    return result;
+}
+
+function deepClone(target, cache = new WeakSet()) {
+    if (!isObject(target)) return target; // 拷贝基本类型值
+
+    if (cache.has(target)) return target;
+
+    cache.add(target);
+
+    let cloneTarget;
+    const tag = Object.prototype.toString.call(target);
+    
+    if (tag === arrayTag) {
+        cloneTarget = initCloneArray(target);
+    } else {
+        // 使用拷贝对象的构造方法创建对应类型的数据
+        cloneTarget = initCloneTargetByTag(tag);
+    }
+
+
+    Reflect.ownKeys(target).forEach(key => {
+        cloneTarget[key] = deepClone(target[key], cache); // 递归拷贝属性
+    });
+    
+    return cloneTarget;
+}
+```
+`initCloneArray` 是为了兼容处理匹配正则时执行`exec()`后的返回结果，`exec()`方法会返回一个数组，其中包含了额外的`index`和`input`属性。
+
+#### 处理可遍历类型 - Map
 
 
 
-参考文章：
+
+
+参考文章及源码：
 [「前端进阶」JS中的栈内存堆内存](https://juejin.cn/post/6844903873992196110)
 [浅拷贝与深拷贝](https://juejin.cn/post/6844904197595332622)
 [如何写出一个惊艳面试官的深拷贝?](https://segmentfault.com/a/1190000020255831)
+[js 深拷贝 vs 浅拷贝](https://juejin.cn/post/6844903493925371917)
+[理解 Es6 中的 Symbol 类型](https://juejin.cn/post/6846687598249771022)
+[https://github.com/lodash/lodash/blob/master/.internal/baseClone.js](https://github.com/lodash/lodash/blob/master/.internal/baseClone.js)
