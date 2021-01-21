@@ -254,31 +254,35 @@ console.log(obj2); // { name: "烟花渲染离别", Symbol(我是独一无二的
 
 上面只处理了数组和对象，还有其他的很多引用类型的值没进行处理，我们需要先知道要知道要拷贝的是什么类型的对象，我们可以使用`Object.prototype.toString.call()`来获取对象的准确类型。
 
-获取到了具体的引用类型后，我们可以根据对应的类型进行初始化对象的操作。
-
 ```js
 const arrayTag = '[object Array]'
 const objectTag = '[object Object]'
 const mapTag = '[object Map]'
 const setTag = '[object Set]'
-
-const boolTag = '[object Boolean]'
-const dateTag = '[object Date]'
-const errorTag = '[object Error]'
-const numberTag = '[object Number]'
 const regexpTag = '[object RegExp]'
+const boolTag = '[object Boolean]'
+const numberTag = '[object Number]'
 const stringTag = '[object String]'
 const symbolTag = '[object Symbol]'
+const dateTag = '[object Date]'
+const errorTag = '[object Error]'
 ```
 
-#### 初始化拷贝对象
+#### 创建拷贝对象
+
+获取到了具体的引用类型后，我们可以根据对应的类型进行初始化对象的操作。通过`target.constructor`拿到拷贝对象的构造函数，通过源对象的构造函数生成的对象可以保留对象原型上的数据，如果使用`{}`，则原型上的数据会丢失。
+- `Boolean`、`Number`、`String`、`Date`、`Error`我们可以直接通过构造函数和原始数据创建一个新的对象。
+- `Object`、`Map`、`Set`我们直接执行构造函数返回初始值，递归处理后续属性，因为它们的属性可以保存对象。
+- `Array`、`Symbol`、`RegExp`进行特殊处理。
 
 ```js
-function initCloneTargetByTag(target) {
+function initCloneTargetByTag(target, tag) {
     const Ctor = target.constructor;
     switch (tag) {
         case boolTag:
         case dateTag:
+            return new Ctor(+target);
+
         case numberTag:
         case stringTag:
         case errorTag:
@@ -287,7 +291,10 @@ function initCloneTargetByTag(target) {
         case objectTag:
         case mapTag:
         case setTag:
-            return new Ctor;
+            return new Ctor();
+
+        case arrayTag:
+            return cloneArray(target);
 
         case symbolTag:
             return cloneSymbol(target);
@@ -296,12 +303,110 @@ function initCloneTargetByTag(target) {
             return cloneRegExp(target);
     }
 }
+function deepClone(target, cache = new WeakSet()) {
+    ...
+
+    const tag = Object.prototype.toString.call(target);
+    let cloneTarget = initCloneTargetByTag(target, tag); // 使用拷贝对象的构造方法创建对应类型的数据
+
+    ...
+}
 ```
 
-#### 处理可遍历类型 - 数组
+#### 初始化 Array
+
+`cloneArray` 是为了兼容处理匹配正则时执行`exec()`后的返回结果，`exec()`方法会返回一个数组，其中包含了额外的`index`和`input`属性。
 
 ```js
-function initCloneArray(array) {
+function cloneArray(array) {
+    const { length } = array;
+    const result = new array.constructor(length);
+  
+    if (length && typeof array[0] === 'string' && hasOwnProperty.call(array, 'index')) {
+        result.index = array.index;
+        result.input = array.input;
+    }
+    return result;
+}
+```
+
+#### 初始化 Symbol
+
+```js
+function cloneSymbol(symbol) {
+    return Object(Symbol.prototype.valueOf.call(symbol));
+}
+```
+#### 初始化 RegExp
+
+```js
+function cloneRegExp(regexp) {
+    const reFlags = /\w*$/; // \w 用于匹配字母，数字或下划线字符，相当于[A-Za-z0-9_]
+    const result = new regexp.constructor(regexp.source, reFlags.exec(regexp)); // 返回当前匹配的文本
+    result.lastIndex = regexp.lastIndex; // 下一次匹配的起始索引
+    return result;
+}
+```
+
+#### 处理Map和Set
+
+`map`和`set`有通过独有的`set`、`add`方法设置值，单独处理。
+
+```js
+function deepClone(target, cache = new WeakSet()) {
+    ...
+
+    if (tag === mapTag) {
+        target.forEach((value, key) => {
+            cloneTarget.set(key, deepClone(value, map));
+        });
+        return cloneTarget;
+    }
+
+    if (tag === setTag) {
+        target.forEach(value => {
+            cloneTarget.add(deepClone(value, map));
+        });
+        return cloneTarget;
+    }
+
+    ...
+}
+```
+
+#### 处理函数
+
+事实上，我们直接使用同一个内存地址的函数是没问题的，所以我们可以直接返回该函数，`lodash`上也是这么处理的。
+
+```js
+function deepClone(target, cache = new WeakSet()) {
+    ...
+
+    if (tag === functionTag) {
+        return target;
+    }
+    
+    ...
+}
+```
+
+### 完整代码
+
+```js
+const arrayTag = '[object Array]'
+const objectTag = '[object Object]'
+const mapTag = '[object Map]'
+const setTag = '[object Set]'
+const functionTag = '[object Function]';
+const boolTag = '[object Boolean]'
+const dateTag = '[object Date]'
+const errorTag = '[object Error]'
+const numberTag = '[object Number]'
+const regexpTag = '[object RegExp]'
+const stringTag = '[object String]'
+const symbolTag = '[object Symbol]'
+
+function cloneArray(array) {
     const { length } = array;
     const result = new array.constructor(length);
   
@@ -312,6 +417,50 @@ function initCloneArray(array) {
     return result;
 }
 
+function cloneSymbol(symbol) {
+    return Object(Symbol.prototype.valueOf.call(symbol));
+}
+
+function cloneRegExp(regexp) {
+    const reFlags = /\w*$/;
+    const result = new regexp.constructor(regexp.source, reFlags.exec(regexp));
+    result.lastIndex = regexp.lastIndex;
+    return result;
+}
+
+function initCloneTargetByTag(target, tag) {
+    const Ctor = target.constructor;
+    switch (tag) {
+        case boolTag:
+        case dateTag:
+            return new Ctor(+target);
+
+        case numberTag:
+        case stringTag:
+        case errorTag:
+            return new Ctor(target);
+
+        case objectTag:
+        case mapTag:
+        case setTag:
+            return new Ctor();
+
+        case arrayTag:
+            return cloneArray(target);
+
+        case symbolTag:
+            return cloneSymbol(target);
+
+        case regexpTag:
+            return cloneRegExp(target);
+    }
+}
+
+function isObject(target) {
+    const type = typeof target;
+    return target !== null && (type === 'object' || type === 'function');
+}
+
 function deepClone(target, cache = new WeakSet()) {
     if (!isObject(target)) return target; // 拷贝基本类型值
 
@@ -319,36 +468,111 @@ function deepClone(target, cache = new WeakSet()) {
 
     cache.add(target);
 
-    let cloneTarget;
     const tag = Object.prototype.toString.call(target);
-    
-    if (tag === arrayTag) {
-        cloneTarget = initCloneArray(target);
-    } else {
-        // 使用拷贝对象的构造方法创建对应类型的数据
-        cloneTarget = initCloneTargetByTag(tag);
+    let cloneTarget = initCloneTargetByTag(target, tag); // 使用拷贝对象的构造方法创建对应类型的数据
+
+    if (tag === mapTag) {
+        target.forEach((value, key) => {
+            cloneTarget.set(key, deepClone(value, map));
+        });
+        return cloneTarget;
     }
 
+    if (tag === setTag) {
+        target.forEach(value => {
+            cloneTarget.add(deepClone(value, map));
+        });
+        return cloneTarget;
+    }
+
+    if (tag === functionTag) {
+        return target;
+    }
 
     Reflect.ownKeys(target).forEach(key => {
         cloneTarget[key] = deepClone(target[key], cache); // 递归拷贝属性
     });
-    
+
     return cloneTarget;
 }
 ```
-`initCloneArray` 是为了兼容处理匹配正则时执行`exec()`后的返回结果，`exec()`方法会返回一个数组，其中包含了额外的`index`和`input`属性。
 
-#### 处理可遍历类型 - Map
+### 测试代码
 
+写完了代码我们肯定得需要测试下代码是否能正常运行，下面来看看吧。
 
+```js
+const map = new Map();
+map.set('烟花', '渲染离别');
+map.set('掘金', 'https://juejin.cn/user/2101921961223614');
 
+const set = new Set();
+set.add('set1');
+set.add('set2');
+
+let target = {
+    arr: [1, 2, 3],
+    bool: false,
+    bool2: new Boolean(true),
+    date: new Date(),
+    empty: null,
+    error: new Error(),
+    func: () => {
+        console.log('我是函数');
+    },
+    map,
+    num: 1,
+    num2: new Number(1),
+    obj: {
+        children: {
+            name: '我是子对象'
+        }
+    },
+    reg: /\w*$/,
+    set,
+    str: '烟花渲染离别',
+    str2: new String('new String'),
+    symbol: Symbol('symbol'),
+    symbol: Object(Symbol('new Symbol')),
+    undefined: undefined,
+};
+let cloneTarget = deepClone(target);
+console.log(cloneTarget);
+target.obj.children.name = '修改子对象';
+console.log(cloneTarget.obj.children.name);
+```
+
+![](https://p9-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/599e96ca02504560b7c3e3ea7680df15~tplv-k3u1fbpfcp-watermark.image)
+
+### 总结
+
+深拷贝作为面试常考的题目，里面确实涉及到了很多细节：
+- 考察你的递归能力
+- 考察处理循环引用，还可以深入挖掘对`weakSet`、`weakMap`弱引用的了解程度
+- 考察各种引用类型的处理，对数据类型的掌握的程度
+- 考察`Symbol`作为对象属性的遍历处理等
+希望大家看完这篇文章都能有所收获。
+文章如果哪里写的不对，欢迎评论区留言，如果喜欢这篇文章，欢迎点赞，相信我，你的点赞也能化作一道光。
 
 
 参考文章及源码：
+
 [「前端进阶」JS中的栈内存堆内存](https://juejin.cn/post/6844903873992196110)
+
 [浅拷贝与深拷贝](https://juejin.cn/post/6844904197595332622)
+
 [如何写出一个惊艳面试官的深拷贝?](https://segmentfault.com/a/1190000020255831)
+
 [js 深拷贝 vs 浅拷贝](https://juejin.cn/post/6844903493925371917)
+
 [理解 Es6 中的 Symbol 类型](https://juejin.cn/post/6846687598249771022)
+
 [https://github.com/lodash/lodash/blob/master/.internal/baseClone.js](https://github.com/lodash/lodash/blob/master/.internal/baseClone.js)
+
+
+
+
+![](http://ww4.sinaimg.cn/bmiddle/006APoFYjw1f9lwxs05mvj30if0iejs4.jpg =200x200)
+![](http://wx2.sinaimg.cn/bmiddle/005TGG6vly1filq1wz0otj307s07sdft.jpg =200x200)
+
+
