@@ -1,29 +1,65 @@
 
-const mapTag = '[object Map]';
-const setTag = '[object Set]';
-const arrayTag = '[object Array]';
-const objectTag = '[object Object]';
-const argsTag = '[object Arguments]';
+const arrayTag = '[object Array]'
+const objectTag = '[object Object]'
+const mapTag = '[object Map]'
+const setTag = '[object Set]'
+const functionTag = '[object Function]';
+const boolTag = '[object Boolean]'
+const dateTag = '[object Date]'
+const errorTag = '[object Error]'
+const numberTag = '[object Number]'
+const regexpTag = '[object RegExp]'
+const stringTag = '[object String]'
+const symbolTag = '[object Symbol]'
 
-const boolTag = '[object Boolean]';
-const dateTag = '[object Date]';
-const numberTag = '[object Number]';
-const stringTag = '[object String]';
-const symbolTag = '[object Symbol]';
-const errorTag = '[object Error]';
-const regexpTag = '[object RegExp]';
-const funcTag = '[object Function]';
-
-const deepTag = [mapTag, setTag, arrayTag, objectTag, argsTag];
-
-
-function forEach(array, iteratee) {
-    let index = -1;
-    const length = array.length;
-    while (++index < length) {
-        iteratee(array[index], index);
+function cloneArray(array) {
+    const { length } = array;
+    const result = new array.constructor(length);
+  
+    if (length && typeof array[0] === 'string' && hasOwnProperty.call(array, 'index')) {
+        result.index = array.index;
+        result.input = array.input;
     }
-    return array;
+    return result;
+}
+
+function cloneSymbol(symbol) {
+    return Object(Symbol.prototype.valueOf.call(symbol));
+}
+
+function cloneRegExp(regexp) {
+    const reFlags = /\w*$/;
+    const result = new regexp.constructor(regexp.source, reFlags.exec(regexp));
+    result.lastIndex = regexp.lastIndex;
+    return result;
+}
+
+function initCloneTargetByTag(target, tag) {
+    const Ctor = target.constructor;
+    switch (tag) {
+        case boolTag:
+        case dateTag:
+            return new Ctor(+target);
+
+        case numberTag:
+        case stringTag:
+        case errorTag:
+            return new Ctor(target);
+
+        case objectTag:
+        case mapTag:
+        case setTag:
+            return new Ctor();
+
+        case arrayTag:
+            return cloneArray(target);
+
+        case symbolTag:
+            return cloneSymbol(target);
+
+        case regexpTag:
+            return cloneRegExp(target);
+    }
 }
 
 function isObject(target) {
@@ -31,118 +67,81 @@ function isObject(target) {
     return target !== null && (type === 'object' || type === 'function');
 }
 
-function getType(target) {
-    return Object.prototype.toString.call(target);
-}
+function deepClone(target, cache = new WeakSet()) {
+    if (!isObject(target)) return target; // 拷贝基本类型值
 
-function getInit(target) {
-    const Ctor = target.constructor;
-    return new Ctor();
-}
+    if (cache.has(target)) return target;
 
-function cloneSymbol(targe) {
-    return Object(Symbol.prototype.valueOf.call(targe));
-}
+    cache.add(target);
 
-function cloneReg(targe) {
-    const reFlags = /\w*$/;
-    const result = new targe.constructor(targe.source, reFlags.exec(targe));
-    result.lastIndex = targe.lastIndex;
-    return result;
-}
+    const tag = Object.prototype.toString.call(target);
+    let cloneTarget = initCloneTargetByTag(target, tag); // 使用拷贝对象的构造方法创建对应类型的数据
 
-function cloneFunction(func) {
-    const bodyReg = /(?<={)(.|\n)+(?=})/m;
-    const paramReg = /(?<=\().+(?=\)\s+{)/;
-    const funcString = func.toString();
-    if (func.prototype) {
-        const param = paramReg.exec(funcString);
-        const body = bodyReg.exec(funcString);
-        if (body) {
-            if (param) {
-                const paramArr = param[0].split(',');
-                return new Function(...paramArr, body[0]);
-            } else {
-                return new Function(body[0]);
-            }
-        } else {
-            return null;
-        }
-    } else {
-        return eval(funcString);
+    if (tag === mapTag) {
+        target.forEach((value, key) => {
+            cloneTarget.set(key, deepClone(value, map));
+        });
+        return cloneTarget;
     }
-}
 
-function cloneOtherType(targe, type) {
-    const Ctor = targe.constructor;
-    switch (type) {
-        case boolTag:
-        case numberTag:
-        case stringTag:
-        case errorTag:
-        case dateTag:
-            return new Ctor(targe);
-        case regexpTag:
-            return cloneReg(targe);
-        case symbolTag:
-            return cloneSymbol(targe);
-        case funcTag:
-            return cloneFunction(targe);
-        default:
-            return null;
+    if (tag === setTag) {
+        target.forEach(value => {
+            cloneTarget.add(deepClone(value, map));
+        });
+        return cloneTarget;
     }
-}
 
-function clone(target, map = new WeakMap()) {
-
-    // 克隆原始类型
-    if (!isObject(target)) {
+    if (tag === functionTag) {
         return target;
     }
 
-    // 初始化
-    const type = getType(target);
-    let cloneTarget;
-    if (deepTag.includes(type)) {
-        cloneTarget = getInit(target, type);
-    } else {
-        return cloneOtherType(target, type);
-    }
-
-    // 防止循环引用
-    if (map.get(target)) {
-        return map.get(target);
-    }
-    map.set(target, cloneTarget);
-
-    // 克隆set
-    if (type === setTag) {
-        target.forEach(value => {
-            cloneTarget.add(clone(value, map));
-        });
-        return cloneTarget;
-    }
-
-    // 克隆map
-    if (type === mapTag) {
-        target.forEach((value, key) => {
-            cloneTarget.set(key, clone(value, map));
-        });
-        return cloneTarget;
-    }
-
-    // 克隆对象和数组
-    const keys = type === arrayTag ? undefined : Object.keys(target);
-    forEach(keys || target, (value, key) => {
-        if (keys) {
-            key = value;
-        }
-        cloneTarget[key] = clone(target[key], map);
+    Reflect.ownKeys(target).forEach(key => {
+        cloneTarget[key] = deepClone(target[key], cache); // 递归拷贝属性
     });
 
     return cloneTarget;
 }
 
-module.exports = {
-    clone
+// let symbol = Symbol('我是独一无二的值');
+// let obj = {
+//     [symbol]: [1]
+// };
+// console.log('obj: ', obj);
+// const obj2 = deepClone(obj);
+// obj2[symbol].push(2);
+// console.log('obj2: ', obj2);
+const map = new Map();
+map.set('烟花', '渲染离别');
+map.set('掘金', 'https://juejin.cn/user/2101921961223614');
+const set = new Set();
+set.add('set1');
+set.add('set2');
+
+let target = {
+    arr: [1, 2, 3],
+    bool: false,
+    bool2: new Boolean(true),
+    date: new Date(),
+    empty: null,
+    error: new Error(),
+    func: () => { console.log('我是函数'); },
+    map,
+    num: 1,
+    num2: new Number(1),
+    obj: {
+        children: {
+            name: '我是子对象'
+        }
+    },
+    reg: /\w*$/,
+    set,
+    str: '烟花渲染离别',
+    str2: new String('new String'),
+    symbol: Symbol('symbol'),
+    symbol: Object(Symbol('new Symbol')),
+    undefined: undefined,
 };
+let cloneTarget = deepClone(target);
+console.log(cloneTarget);
+target.obj.children.name = '修改子对象';
+console.log(cloneTarget.obj.children.name);
