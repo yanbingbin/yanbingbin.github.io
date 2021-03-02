@@ -16,7 +16,6 @@ const CreateSchedule = () => {
     }
 }
 function Component() {
-    this.loaded = false;
 }
 Component.prototype.load = function() {
     setTimeout(() => {
