@@ -79,14 +79,14 @@ function deepClone(target, cache = new WeakSet()) {
 
     if (tag === mapTag) {
         target.forEach((value, key) => {
-            cloneTarget.set(key, deepClone(value, map));
+            cloneTarget.set(key, deepClone(value, cache));
         });
         return cloneTarget;
     }
 
     if (tag === setTag) {
         target.forEach(value => {
-            cloneTarget.add(deepClone(value, map));
+            cloneTarget.add(deepClone(value, cache));
         });
         return cloneTarget;
     }
