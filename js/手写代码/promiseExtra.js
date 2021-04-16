@@ -179,28 +179,36 @@ function resolvePromise(promise2, x, resolve, reject) {
 
 // 中断promise 利用 race 返回最先执行的 promise 结果
 let p1 = new Promise((resolve, reject) => {
-    setTimeout(() => {
+    // setTimeout(() => {
+    reject(2);
         resolve(1);
-    }, 2000)
+    // }, 1000)
+});
+p1.then(res => {
+    console.log('res: ', res);
+}).then(res => {
+    console.log('res: ', res);
+}).catch(err => {
+    console.log('err: ', err);
 });
 // 这里我要中断p1
-function wrap(p1) {
-    let abort;
-    let p = new Promise((resolve, reject) => {
-        abort = reject;
-    });
-    let p2 = Promise.race([p1, p]);
-    p2.abort = abort;
-    return p2;
-}
-let p2 = wrap(p1);
-p2.then(data => {
-    console.log('data: ', data);
-}, err => {
-    console.log('err: ', err);
-})
-setTimeout(() => {
-    p2.abort('错误信息');
-}, 100)
+// function wrap(p1) {
+//     let abort;
+//     let p = new Promise((resolve, reject) => {
+//         abort = reject;
+//     });
+//     let p2 = Promise.race([p1, p]);
+//     p2.abort = abort;
+//     return p2;
+// }
+// let p2 = wrap(p1);
+// p2.then(data => {
+//     console.log('data: ', data);
+// }, err => {
+//     console.log('err: ', err);
+// })
+// setTimeout(() => {
+//     p2.abort('错误信息');
+// }, 100)
 
 module.exports = Promise;
